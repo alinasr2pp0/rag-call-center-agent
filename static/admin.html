@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>لوحة التحكم - إدارة مركز الاتصال</title>
+<style>
+  :root {
+    --bg: #F6F4F0; --panel: #FFFFFF; --ink: #1E2A28; --muted: #6B7674;
+    --line: #E4E0D8; --accent: #1F5C52; --accent-soft: #E4EFEC;
+    --danger: #B3423D; --warn: #B7791F;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Segoe UI",Tahoma,Arial,sans-serif; }
+
+  /* ---- Login ---- */
+  #loginScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  .login-box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:32px; width:320px; }
+  .login-box h1 { font-size:18px; margin:0 0 20px; }
+  .login-box input { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; margin-bottom:10px; font-family:inherit; font-size:14px; background:var(--bg); }
+  .login-box button { width:100%; padding:11px; border:none; border-radius:9px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; margin-top:6px; }
+  .login-note { font-size:12px; color:var(--muted); margin-top:10px; }
+  .error-text { color:var(--danger); font-size:12.5px; margin-top:4px; min-height:16px; }
+
+  /* ---- Shell ---- */
+  #appScreen { display:none; max-width:1000px; margin:0 auto; padding:28px 20px; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; }
+  .topbar h1 { font-size:19px; margin:0; }
+  .topbar .who { font-size:12.5px; color:var(--muted); }
+  .logout { background:none; border:1px solid var(--line); border-radius:8px; padding:6px 14px; cursor:pointer; font-size:12.5px; }
+
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:22px; }
+  .stat-card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .stat-card .num { font-size:22px; font-weight:700; }
+  .stat-card .lbl { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .tabs { display:flex; gap:6px; margin-bottom:16px; }
+  .tab-btn { background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:8px 16px; font-size:13.5px; cursor:pointer; }
+  .tab-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  th, td { padding:10px 12px; text-align:right; font-size:13px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; background:#FAF9F6; }
+  tr:last-child td { border-bottom:none; }
+  tr.clickable { cursor:pointer; }
+  tr.clickable:hover { background:var(--accent-soft); }
+
+  .badge { padding:2px 9px; border-radius:999px; font-size:11.5px; font-weight:600; }
+  .badge.open { background:#EFEFEF; color:var(--muted); }
+  .badge.resolved_confirmed, .badge.resolved_by_rag { background:var(--accent-soft); color:var(--accent); }
+  .badge.escalated { background:#FBEAEA; color:var(--danger); }
+
+  .kb-toolbar { display:flex; justify-content:flex-end; margin-bottom:12px; }
+  .btn { background:var(--accent); color:#fff; border:none; border-radius:9px; padding:9px 16px; font-size:13.5px; cursor:pointer; font-weight:600; }
+  .btn.secondary { background:none; border:1px solid var(--line); color:var(--ink); }
+  .btn.danger { background:var(--danger); }
+
+  .modal-overlay { position:fixed; inset:0; background:rgba(30,42,40,.45); display:flex; align-items:center; justify-content:center; z-index:10; padding:20px; }
+  .modal { background:var(--panel); border-radius:14px; padding:24px; width:100%; max-width:560px; max-height:85vh; overflow-y:auto; }
+  .modal h2 { margin:0 0 16px; font-size:16px; }
+  .modal label { font-size:12.5px; color:var(--muted); display:block; margin:12px 0 4px; }
+  .modal input, .modal textarea { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:13.5px; background:var(--bg); }
+  .modal textarea { min-height:64px; resize:vertical; }
+  .modal-actions { display:flex; gap:8px; margin-top:18px; justify-content:flex-end; }
+
+  .detail-section { margin-bottom:14px; }
+  .detail-section h3 { font-size:12.5px; color:var(--muted); margin:0 0 6px; }
+  .msg-line { padding:6px 10px; border-radius:8px; background:var(--bg); margin-bottom:5px; font-size:13px; }
+  .msg-line.agent { background:var(--accent-soft); }
+
+  .mode-note { font-size:12px; color:var(--warn); margin-bottom:14px; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>تسجيل دخول الموظفين</h1>
+    <input id="loginUser" placeholder="اسم المستخدم" value="admin">
+    <input id="loginPass" type="password" placeholder="كلمة المرور" value="changeme123">
+    <button id="loginBtn">دخول</button>
+    <div class="error-text" id="loginError"></div>
+    <div class="login-note">افتراضيًا: admin / changeme123 — غيّرها من الـ .env بعد أول تشغيل</div>
+  </div>
+</div>
+
+<div id="appScreen">
+  <div class="topbar">
+    <h1>لوحة التحكم</h1>
+    <div>
+      <span class="who" id="whoAmI"></span>
+      <button class="logout" id="logoutBtn">تسجيل خروج</button>
+    </div>
+  </div>
+  <div class="mode-note" id="modeNote"></div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tickets">التذاكر والتصعيدات</button>
+    <button class="tab-btn" data-tab="kb">قاعدة المعرفة</button>
+  </div>
+
+  <div id="ticketsTab"></div>
+  <div id="kbTab" style="display:none"></div>
+</div>
+
+<script>
+const API_BASE = "";
+let token = null, role = null, username = null, demoMode = false;
+
+// ---------------- Auth ----------------
+document.getElementById("loginBtn").addEventListener("click", login);
+async function login() {
+  const u = document.getElementById("loginUser").value;
+  const p = document.getElementById("loginPass").value;
+  const errEl = document.getElementById("loginError");
+  errEl.textContent = "";
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    if (!res.ok) throw new Error("bad creds");
+    const data = await res.json();
+    token = data.access_token; role = data.role; username = data.username;
+    demoMode = false;
+  } catch {
+    // No live backend reachable (or wrong creds against it) — fall back to a demo session
+    if (u === "admin" && p === "changeme123") {
+      token = "demo-token"; role = "admin"; username = "admin"; demoMode = true;
+    } else {
+      errEl.textContent = "بيانات الدخول غير صحيحة";
+      return;
+    }
+  }
+  enterApp();
+}
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  token = null;
+  document.getElementById("appScreen").style.display = "none";
+  document.getElementById("loginScreen").style.display = "flex";
+});
+
+function authHeaders() { return { "Authorization": `Bearer ${token}` }; }
+
+function enterApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appScreen").style.display = "block";
+  document.getElementById("whoAmI").textContent = `${username} (${role})`;
+  document.getElementById("modeNote").textContent = demoMode
+    ? "⚠ لا يوجد اتصال بالسيرفر الحقيقي — البيانات المعروضة تجريبية (mock)"
+    : "";
+  loadStats();
+  loadTickets();
+  loadKB();
+}
+
+// ---------------- Tabs ----------------
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    document.getElementById("ticketsTab").style.display = tab === "tickets" ? "block" : "none";
+    document.getElementById("kbTab").style.display = tab === "kb" ? "block" : "none";
+  });
+});
+
+// ---------------- Demo data (used only when no live backend) ----------------
+const MOCK_STATS = { total: 24, resolved: 15, escalated: 4, open: 5 };
+const MOCK_TICKETS = [
+  { id: "demo-1", status: "resolved_confirmed", category: "الفواتير والدفع", resolution_attempts: 1, opened_at: "2026-09-18T10:02:00" },
+  { id: "demo-2", status: "escalated", category: "التوصيل والشحن", resolution_attempts: 3, opened_at: "2026-09-18T11:20:00" },
+  { id: "demo-3", status: "open", category: "الحساب وتسجيل الدخول", resolution_attempts: 1, opened_at: "2026-09-19T09:15:00" },
+];
+const MOCK_KB = [
+  { id: "KB-0001", category: "الفواتير والدفع", title: "خصم مبلغ أكبر من قيمة الباقة", problem_variants: ["اتخصم مني فلوس أكتر من الباقة"], solution_text: "راجع تفاصيل الفاتورة من التطبيق.", solution_steps: [], escalate_if: [], tags: [] },
+  { id: "KB-0002", category: "الحساب وتسجيل الدخول", title: "استعادة كلمة المرور", problem_variants: ["نسيت الباسورد"], solution_text: "استخدم رابط نسيت كلمة المرور.", solution_steps: [], escalate_if: [], tags: [] },
+];
+
+// ---------------- Stats ----------------
+async function loadStats() {
+  let s;
+  if (demoMode) { s = MOCK_STATS; }
+  else {
+    try { s = await (await fetch(`${API_BASE}/admin/stats`, { headers: authHeaders() })).json(); }
+    catch { s = MOCK_STATS; }
+  }
+  document.getElementById("statsRow").innerHTML = `
+    <div class="stat-card"><div class="num">${s.total}</div><div class="lbl">إجمالي التذاكر</div></div>
+    <div class="stat-card"><div class="num">${s.resolved}</div><div class="lbl">تم الحل</div></div>
+    <div class="stat-card"><div class="num">${s.escalated}</div><div class="lbl">تم التصعيد</div></div>
+    <div class="stat-card"><div class="num">${s.open}</div><div class="lbl">مفتوحة</div></div>
+  `;
+}
+
+// ---------------- Tickets ----------------
+const STATUS_LABEL = {
+  open: "مفتوحة", resolved_by_rag: "حل أولي (نص)", resolved_confirmed: "تم التأكيد",
+  escalated: "تم التصعيد", awaiting_confirmation: "بانتظار التأكيد",
+};
+
+async function loadTickets() {
+  let tickets;
+  if (demoMode) { tickets = MOCK_TICKETS; }
+  else {
+    try { tickets = await (await fetch(`${API_BASE}/admin/tickets`, { headers: authHeaders() })).json(); }
+    catch { tickets = MOCK_TICKETS; }
+  }
+
+  const rows = tickets.map(t => `
+    <tr class="clickable" onclick="openTicket('${t.id}')">
+      <td>${t.id.slice(0, 8)}</td>
+      <td><span class="badge ${t.status}">${STATUS_LABEL[t.status] || t.status}</span></td>
+      <td>${t.category || "-"}</td>
+      <td>${t.resolution_attempts}</td>
+      <td>${new Date(t.opened_at).toLocaleString("ar-EG")}</td>
+    </tr>`).join("");
+
+  document.getElementById("ticketsTab").innerHTML = `
+    <table>
+      <thead><tr><th>رقم التذكرة</th><th>الحالة</th><th>التصنيف</th><th>عدد المحاولات</th><th>تاريخ الفتح</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">لا توجد تذاكر بعد</td></tr>'}</tbody>
+    </table>`;
+}
+
+async function openTicket(id) {
+  let detail;
+  if (demoMode) {
+    detail = {
+      ticket: MOCK_TICKETS.find(t => t.id === id),
+      messages: [{ sender: "customer", content: "اتخصم مني فلوس زيادة" }, { sender: "agent", content: "راجع تفاصيل الفاتورة من التطبيق." }],
+      calls: [{ status: "completed", outcome: "resolved_confirmed", duration_seconds: 42 }],
+      escalations: [],
+    };
+  } else {
+    try { detail = await (await fetch(`${API_BASE}/admin/tickets/${id}`, { headers: authHeaders() })).json(); }
+    catch { return; }
+  }
+
+  const msgs = detail.messages.map(m => `<div class="msg-line ${m.sender === "agent" ? "agent" : ""}">${m.sender === "customer" ? "🙋" : "🤖"} ${m.content}</div>`).join("");
+  const calls = detail.calls.map(c => `<div class="msg-line">📞 ${c.status} — ${c.outcome || "—"} (${c.duration_seconds || 0} ث)</div>`).join("") || "لا توجد مكالمات بعد";
+  const esc = detail.escalations.map(e => `<div class="msg-line">⚠ ${e.reason}</div>`).join("") || "لا يوجد تصعيد";
+
+  showModal(`
+    <h2>تفاصيل التذكرة ${id.slice(0, 8)}</h2>
+    <div class="detail-section"><h3>المحادثة</h3>${msgs}</div>
+    <div class="detail-section"><h3>المكالمات</h3>${calls}</div>
+    <div class="detail-section"><h3>التصعيدات</h3>${esc}</div>
+    <div class="modal-actions"><button class="btn secondary" onclick="closeModal()">إغلاق</button></div>
+  `);
+}
+
+// ---------------- KB management ----------------
+let kbCache = [];
+
+async function loadKB() {
+  if (demoMode) { kbCache = MOCK_KB; }
+  else {
+    try { kbCache = await (await fetch(`${API_BASE}/admin/kb`, { headers: authHeaders() })).json(); }
+    catch { kbCache = MOCK_KB; }
+  }
+  renderKB();
+}
+
+function renderKB() {
+  const rows = kbCache.map(a => `
+    <tr>
+      <td>${a.id}</td>
+      <td>${a.category}</td>
+      <td>${a.title}</td>
+      <td>
+        <button class="btn secondary" onclick="editKB('${a.id}')">تعديل</button>
+        <button class="btn danger" onclick="deleteKB('${a.id}')">حذف</button>
+      </td>
+    </tr>`).join("");
+
+  document.getElementById("kbTab").innerHTML = `
+    <div class="kb-toolbar"><button class="btn" onclick="newKB()">+ مشكلة جديدة</button></div>
+    <table>
+      <thead><tr><th>المعرف</th><th>التصنيف</th><th>العنوان</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4">لا توجد مقالات بعد</td></tr>'}</tbody>
+    </table>`;
+}
+
+function newKB() { showKBForm(null); }
+function editKB(id) { showKBForm(kbCache.find(a => a.id === id)); }
+
+function showKBForm(article) {
+  const a = article || { category: "", subcategory: "", title: "", problem_variants: [], solution_text: "", solution_steps: [], escalate_if: [], tags: [] };
+  showModal(`
+    <h2>${article ? "تعديل مشكلة" : "مشكلة جديدة"}</h2>
+    <label>التصنيف</label><input id="f_category" value="${a.category}">
+    <label>التصنيف الفرعي</label><input id="f_subcategory" value="${a.subcategory || ""}">
+    <label>العنوان</label><input id="f_title" value="${a.title}">
+    <label>صيغ المشكلة (سطر لكل صيغة)</label><textarea id="f_variants">${(a.problem_variants || []).join("\n")}</textarea>
+    <label>نص الحل</label><textarea id="f_solution">${a.solution_text}</textarea>
+    <label>خطوات الحل (سطر لكل خطوة)</label><textarea id="f_steps">${(a.solution_steps || []).join("\n")}</textarea>
+    <label>حالات التصعيد (سطر لكل حالة)</label><textarea id="f_escalate">${(a.escalate_if || []).join("\n")}</textarea>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">إلغاء</button>
+      <button class="btn" onclick="saveKB(${article ? `'${article.id}'` : "null"})">حفظ</button>
+    </div>
+  `);
+}
+
+async function saveKB(id) {
+  const body = {
+    category: document.getElementById("f_category").value,
+    subcategory: document.getElementById("f_subcategory").value || null,
+    title: document.getElementById("f_title").value,
+    problem_variants: document.getElementById("f_variants").value.split("\n").filter(Boolean),
+    solution_text: document.getElementById("f_solution").value,
+    solution_steps: document.getElementById("f_steps").value.split("\n").filter(Boolean),
+    escalate_if: document.getElementById("f_escalate").value.split("\n").filter(Boolean),
+  };
+
+  if (demoMode) {
+    if (id) { Object.assign(kbCache.find(a => a.id === id), body); }
+    else { kbCache.push({ id: "KB-" + Math.random().toString(36).slice(2, 7).toUpperCase(), ...body }); }
+    closeModal(); renderKB(); return;
+  }
+
+  try {
+    await fetch(`${API_BASE}/admin/kb${id ? "/" + id : ""}`, {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    closeModal(); loadKB();
+  } catch { alert("فشل الحفظ — تحقق من الاتصال بالسيرفر"); }
+}
+
+async function deleteKB(id) {
+  if (!confirm("متأكد من حذف المقالة دي؟")) return;
+  if (demoMode) { kbCache = kbCache.filter(a => a.id !== id); renderKB(); return; }
+  try {
+    await fetch(`${API_BASE}/admin/kb/${id}`, { method: "DELETE", headers: authHeaders() });
+    loadKB();
+  } catch { alert("فشل الحذف — تحقق من الاتصال بالسيرفر"); }
+}
+
+// ---------------- Modal helper ----------------
+function showModal(html) {
+  closeModal();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "modalOverlay";
+  overlay.innerHTML = `<div class="modal">${html}</div>`;
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+}
+function closeModal() { document.getElementById("modalOverlay")?.remove(); }
+</script>
+</body>
+</html>
